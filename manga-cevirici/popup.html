@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+  <h1>Manga Çevirici</h1>
+
+  <div id="warn" class="warn" hidden>
+    OCR API anahtarı girilmemiş. <a id="openOpt1">Ayarlar'a git</a>
+  </div>
+
+  <div class="row">
+    <button id="start" class="primary">Sayfayı çevir</button>
+    <button id="stop">Orijinale dön</button>
+  </div>
+
+  <label for="dir">Çeviri yönü</label>
+  <select id="dir">
+    <option value="en-tr">İngilizce → Türkçe</option>
+    <option value="tr-en">Türkçe → İngilizce</option>
+  </select>
+
+  <label for="series">Sözlük (seri)</label>
+  <select id="series"></select>
+  <div class="row" style="margin-top:6px">
+    <input id="newSeries" type="text" placeholder="Yeni seri adı">
+    <button id="addSeries" class="small">Ekle</button>
+  </div>
+
+  <label for="term">Çevrilmesin diye sözlüğe ekle</label>
+  <div class="row">
+    <input id="term" type="text" placeholder="Konoha   veya   Hokage = Hokage">
+    <button id="addTerm" class="small">Ekle</button>
+  </div>
+  <p class="hint">Sonraki çevirilerde geçerli olur. Sayfayı çevirdiysen "Orijinale dön" ve tekrar "Sayfayı çevir" de.</p>
+
+  <div id="status" class="status"></div>
+  <p class="hint"><a id="openOpt2">Ayarlar</a> · Kısayol: Alt+T</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

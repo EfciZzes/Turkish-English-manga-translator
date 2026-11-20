@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <title>Manga Çevirici — Ayarlar</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="options">
+  <h1>Manga Çevirici — Ayarlar</h1>
+
+  <h2>Yazı okuma (OCR)</h2>
+  <p class="hint">Görseldeki yazıyı okumak için bir OCR servisinin API anahtarı gerekir. En kolayı OCR.space'in ücretsiz anahtarıdır (ocr.space sitesinde e-posta ile alınır).</p>
+
+  <label for="ocrProvider">OCR servisi</label>
+  <select id="ocrProvider">
+    <option value="ocrspace">OCR.space (ücretsiz anahtar var)</option>
+    <option value="vision">Google Cloud Vision (daha iyi okur, faturalandırma hesabı ister)</option>
+  </select>
+
+  <label for="ocrspaceKey">OCR.space API anahtarı</label>
+  <input id="ocrspaceKey" type="password" autocomplete="off" placeholder="K8...">
+
+  <label for="visionKey">Google Cloud Vision API anahtarı</label>
+  <input id="visionKey" type="password" autocomplete="off" placeholder="AIza...">
+  <p class="hint">Anahtarlar sadece bu tarayıcıda saklanır, senkronize edilmez.</p>
+
+  <h2>Çeviri ve görünüm</h2>
+
+  <label for="dir">Varsayılan çeviri yönü</label>
+  <select id="dir">
+    <option value="en-tr">İngilizce → Türkçe</option>
+    <option value="tr-en">Türkçe → İngilizce</option>
+  </select>
+
+  <label for="upper">Harf boyutu</label>
+  <select id="upper">
+    <option value="auto">Orijinal gibi (büyük harfliyse büyük harf)</option>
+    <option value="yes">Hep BÜYÜK HARF</option>
+    <option value="no">Hep normal yazı</option>
+  </select>
+
+  <label for="font">Yazı tipi</label>
+  <input id="font" type="text">
+
+  <label for="minSize">Çevrilecek görsellerin en küçük boyutu (piksel)</label>
+  <input id="minSize" type="number" min="100" max="2000" step="50">
+  <p class="hint">Bundan küçük görseller (logo, küçük resim) atlanır.</p>
+
+  <label class="check"><input id="autoProper" type="checkbox"> Cümle ortasındaki büyük harfli isimleri otomatik koru</label>
+  <label class="check"><input id="skipSfx" type="checkbox"> Büyük ses efektlerini (BOOM, DON...) çevirme</label>
+
+  <h2>Sözlük (çevrilmeyecek / sabit çevrilecek kelimeler)</h2>
+  <p class="hint">Her satıra bir kelime yaz. <b>Konoha</b> yazarsan olduğu gibi kalır. <b>Hidden Leaf = Gizli Yaprak</b> yazarsan hep öyle çevrilir. # ile başlayan satırlar yoksayılır. "Genel" her yerde geçerlidir; diğer seriler popup'tan site başına seçilir.</p>
+
+  <label for="series">Seri</label>
+  <div class="row">
+    <select id="series"></select>
+    <button id="delSeries" class="small">Seriyi sil</button>
+  </div>
+  <div class="row" style="margin-top:6px">
+    <input id="newSeries" type="text" placeholder="Yeni seri adı">
+    <button id="addSeries" class="small">Ekle</button>
+  </div>
+  <textarea id="gloss" style="margin-top:8px" spellcheck="false"></textarea>
+
+  <p style="margin-top:20px">
+    <button id="save" class="primary">Kaydet</button>
+    <span id="saved" class="saved" hidden>Kaydedildi ✓</span>
+  </p>
+
+  <script src="options.js"></script>
+</body>
+</html>

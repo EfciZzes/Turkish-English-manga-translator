@@ -1,0 +1,71 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1d1d1f;
+  --mut: #6b6b76;
+  --acc: #6d5dfc;
+  --acc-fg: #ffffff;
+  --bd: #d9d9e3;
+  --card: #f6f6fb;
+  --warn-bg: #fff4d6;
+  --warn-fg: #7a5600;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1b22;
+    --fg: #ececf1;
+    --mut: #9a9aa8;
+    --bd: #34343f;
+    --card: #24242d;
+    --warn-bg: #3b3115;
+    --warn-fg: #f1d48a;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.45 system-ui, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+h1 { font-size: 16px; margin: 0 0 10px; }
+h2 { font-size: 14px; margin: 22px 0 8px; }
+label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 13px; }
+.hint { color: var(--mut); font-size: 12px; margin: 4px 0 0; }
+input[type=text], input[type=password], input[type=number], select, textarea {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+}
+textarea { min-height: 170px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+button {
+  padding: 8px 12px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+button.primary { background: var(--acc); color: var(--acc-fg); border-color: var(--acc); font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row > * { flex: 1; }
+.row > button.small { flex: 0 0 auto; }
+.check { display: flex; gap: 8px; align-items: center; margin: 10px 0 0; font-weight: 400; }
+.check input { width: auto; }
+.warn { background: var(--warn-bg); color: var(--warn-fg); padding: 8px 10px; border-radius: 8px; margin: 0 0 10px; font-size: 12.5px; }
+.status { color: var(--mut); font-size: 12.5px; min-height: 18px; margin-top: 8px; }
+a { color: var(--acc); cursor: pointer; }
+
+/* popup */
+body.popup { width: 320px; padding: 14px; }
+.popup .row + .row { margin-top: 8px; }
+
+/* options */
+body.options { max-width: 640px; margin: 0 auto; padding: 24px 18px 60px; }
+.saved { color: #1a8a4a; font-size: 13px; margin-left: 10px; }
