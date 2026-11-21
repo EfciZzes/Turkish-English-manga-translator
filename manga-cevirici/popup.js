@@ -26,7 +26,22 @@ function renderSeries() {
   }
 }
 
+async function showUsage() {
+  const { usage } = await chrome.storage.local.get({ usage: null });
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const day = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+  const u = usage || {};
+  const today = u.day === day ? u.dayCount : 0;
+  const cached = u.day === day ? u.cacheDay : 0;
+  const month = u.month === day.slice(0, 7) ? u.monthCount : 0;
+  const pages = u.day === day ? (u.pageDay || 0) : 0;
+  $('usage').textContent = 'OCR isteği — bugün: ' + today + ' (' + pages + ' sayfadan) · bu ay: ' + month +
+    (cached ? ' · önbellekten (ücretsiz): ' + cached : '');
+}
+
 async function refresh() {
+  showUsage();
   const s = await ask('getState');
   const startBtn = $('start');
   if (!s) {

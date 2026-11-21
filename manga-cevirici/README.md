@@ -55,6 +55,14 @@ Mangalardaki karakter ve yer adları çevrilmesin diye sözlük kullanılır.
 
 Sözlüğe eklediğin kelimeler **sonraki** çevirilerde geçerli olur. Açık sayfada denemek için **Orijinale dön** deyip tekrar **Sayfayı çevir**'e bas.
 
+## OCR hakkı nasıl harcanır, nasıl az harcanır
+
+- Eklenti simgesine tıklayınca altta **bugünkü ve bu ayki OCR isteği** sayısı görünür.
+- Her yeni sayfa 1 istek harcar (çok uzun görseller birden fazla). Daha önce okunan sayfa önbellekten gelir ve harcamaz.
+- Hızlı kaydırırken üstünden geçtiğin sayfalar çevrilmez, sadece durup baktıkların çevrilir.
+- Reklam, logo ve küçük resimler atlanır.
+- Servisin sınırı dolarsa eklenti otomatik çeviriyi durdurur ve nedenini yazar, boşuna istek atmaz.
+
 ## Sorun giderme
 
 - **"OCR API anahtarı girilmemiş" diyor:** Adım 3'ü yap.
@@ -72,5 +80,5 @@ Eklenti kurulurken "tüm sitelerdeki verileri okuma ve değiştirme" izni ister.
 ## Bilinen sınırlar
 
 - Yalnızca sayfadaki `<img>` görselleri çevrilir. Yazıyı canvas ile çizen veya CSS arka planı kullanan okuyucularda çalışmaz.
-- Sayfa yenilenince çeviriler kaybolur, yeniden çevrilir (bu OCR hakkından harcar).
+- Sayfa yenilenince çeviri yeniden yapılır ama okunan yazı önbellekte durduğu için OCR hakkından harcamaz.
 - Büyük ses efektleri (BOOM gibi) varsayılan olarak çevrilmez. Ayarlar'dan değiştirilebilir.

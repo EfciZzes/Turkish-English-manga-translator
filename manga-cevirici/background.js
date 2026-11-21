@@ -4,6 +4,81 @@
 
 const DEFAULTS = { ocrProvider: 'ocrspace', ocrspaceKey: '', visionKey: '' };
 
+/* ---------- OCR önbelleği (görselin içeriğine göre) ve kullanım sayacı ---------- */
+
+let dbPromise = null;
+function openDb() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const r = indexedDB.open('mc-ocr', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('ocr', { keyPath: 'k' });
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+  }
+  return dbPromise;
+}
+
+async function cacheGet(k) {
+  try {
+    const d = await openDb();
+    return await new Promise((res) => {
+      const q = d.transaction('ocr').objectStore('ocr').get(k);
+      q.onsuccess = () => res(q.result || null);
+      q.onerror = () => res(null);
+    });
+  } catch (e) { return null; }
+}
+
+async function cachePut(v) {
+  try {
+    const d = await openDb();
+    await new Promise((res) => {
+      const t = d.transaction('ocr', 'readwrite');
+      t.objectStore('ocr').put(v);
+      t.oncomplete = res;
+      t.onerror = res;
+      t.onabort = res;
+    });
+  } catch (e) { /* önbellek en iyi çaba */ }
+}
+
+async function clearCache() {
+  const d = await openDb();
+  await new Promise((res) => {
+    const t = d.transaction('ocr', 'readwrite');
+    t.objectStore('ocr').clear();
+    t.oncomplete = res;
+    t.onerror = res;
+    t.onabort = res;
+  });
+  return true;
+}
+
+async function hashBlob(blob) {
+  const h = await crypto.subtle.digest('SHA-1', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+let usageChain = Promise.resolve();
+function bump(kind) {
+  usageChain = usageChain.then(async () => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const day = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate());
+    const month = day.slice(0, 7);
+    const { usage } = await chrome.storage.local.get({ usage: {} });
+    const u = { day: '', dayCount: 0, cacheDay: 0, pageDay: 0, month: '', monthCount: 0, ...usage };
+    if (u.day !== day) { u.day = day; u.dayCount = 0; u.cacheDay = 0; u.pageDay = 0; }
+    if (u.month !== month) { u.month = month; u.monthCount = 0; }
+    if (kind === 'ocr') { u.dayCount++; u.monthCount++; }
+    else if (kind === 'page') { u.pageDay++; }
+    else { u.cacheDay++; }
+    await chrome.storage.local.set({ usage: u });
+  }).catch(() => {});
+  return usageChain;
+}
+
 /* ---------- Kurulum, menü, kısayol ---------- */
 
 chrome.runtime.onInstalled.addListener((d) => {
@@ -38,6 +113,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.type === 'processUrl') data = await processUrl(msg);
       else if (msg.type === 'processData') data = await processData(msg);
       else if (msg.type === 'translate') data = await translateAll(msg.texts, msg.sl, msg.tl);
+      else if (msg.type === 'clearCache') data = await clearCache();
       else { sendResponse({ error: 'Bilinmeyen istek' }); return; }
       sendResponse({ data });
     } catch (e) {
@@ -191,14 +267,25 @@ async function ocrBlob(blob, opts) {
     throw new Error('OCR API anahtarı girilmemiş. Eklenti simgesi > Ayarlar sayfasından ekle.');
   }
   const sl = opts.sl === 'tr' ? 'tr' : 'en';
+
+  // Aynı görsel daha önce okunduysa servise hiç istek gitmesin
+  const cacheKey = provider + '|' + sl + '|' + (await hashBlob(blob));
+  const hit = await cacheGet(cacheKey);
+  if (hit) {
+    await bump('cache');
+    return { width: hit.width, height: hit.height, lines: hit.lines };
+  }
+
+  await bump('page');
   const bmp = await createImageBitmap(blob);
   const W = bmp.width;
   const H = bmp.height;
+  // sliceH: küçültülmüş görseldeki en büyük parça yüksekliği (daha az parça = daha az istek)
   const cfg = provider === 'vision'
     ? { maxW: 2400, sliceH: 3200, maxBytes: 6000000 }
-    : { maxW: 1400, sliceH: 1700, maxBytes: 950000 };
+    : { maxW: 1400, sliceH: 3500, maxBytes: 950000 };
   const scale0 = Math.min(1, cfg.maxW / W);
-  const cuts = planCuts(bmp, cfg.sliceH);
+  const cuts = planCuts(bmp, Math.round(cfg.sliceH / scale0));
   const lines = [];
   for (let k = 0; k < cuts.length - 1; k++) {
     const y0 = cuts[k];
@@ -212,12 +299,14 @@ async function ocrBlob(blob, opts) {
     }
   }
   if (bmp.close) bmp.close();
+  await cachePut({ k: cacheKey, width: W, height: H, lines, ts: Date.now() });
   return { width: W, height: H, lines };
 }
 
 /* ---------- OCR sağlayıcıları ---------- */
 
 async function ocrSpaceOcr(blob, key, sl) {
+  await bump('ocr');
   const fd = new FormData();
   fd.append('file', blob, 'page.jpg');
   fd.append('language', sl === 'tr' ? 'tur' : 'eng');
@@ -230,6 +319,9 @@ async function ocrSpaceOcr(blob, key, sl) {
     headers: { apikey: key },
     body: fd,
   });
+  if (r.status === 403 || r.status === 429) {
+    throw new Error('OCR.space kota veya hız sınırı doldu ya da anahtar hatalı (HTTP ' + r.status + ')');
+  }
   if (!r.ok) throw new Error('OCR.space hatası (HTTP ' + r.status + ')');
   const j = await r.json();
   if (j.IsErroredOnProcessing) {
@@ -263,6 +355,7 @@ async function ocrSpaceOcr(blob, key, sl) {
 }
 
 async function visionOcr(blob, key, sl) {
+  await bump('ocr');
   const b64 = bufToB64(await blob.arrayBuffer());
   const body = {
     requests: [{

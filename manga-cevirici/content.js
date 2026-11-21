@@ -334,8 +334,22 @@
 
   /* ---------- Ana akış ---------- */
 
+  // Reklam, logo, kapak ve küçük resimlerde boşuna OCR hakkı harcanmasın
   function qualifies(img, min) {
-    return img.complete && img.naturalWidth >= min && img.naturalHeight >= min;
+    if (!img.complete) return false;
+    const m = Math.max(min, 450);
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (w < m || h < m) return false;
+    if (w / h > 2.5) return false; // yatay afiş/banner
+    const r = img.getBoundingClientRect();
+    if (r.width && r.width < 250) return false; // sayfada küçük gösteriliyor
+    return true;
+  }
+
+  function isNear(img, margin) {
+    const r = img.getBoundingClientRect();
+    return r.bottom > -margin && r.top < window.innerHeight + margin;
   }
 
   async function translateImage(img, force) {
@@ -360,7 +374,7 @@
 
       let groups = MC.groupLines(res.lines);
       groups = MC.filterGroups(groups, { skipSfx: settings.skipSfx });
-      if (!groups.length) { m.status = undefined; S.done++; toast('Bu görselde çevrilecek yazı bulunamadı.'); return; }
+      if (!groups.length) { m.status = 'notext'; if (force) toast('Bu görselde çevrilecek yazı bulunamadı.'); return; }
 
       const entries = entriesFor(settings);
       const prepared = groups.map((g) => MC.prepare(g.text, entries, {
@@ -383,7 +397,14 @@
       m.status = 'error';
       S.failed++;
       console.warn('[Manga Çevirici]', e);
-      toast('Çeviri hatası: ' + (e && e.message ? e.message : e));
+      const emsg = e && e.message ? e.message : String(e);
+      if (S.auto && /kota|quota|limit|exceed|too many|max number|429|403/i.test(emsg)) {
+        // Sınır dolduysa kalan sayfalar için boşuna istek atma
+        pauseAuto();
+        toast('OCR sınırı doldu ya da anahtar hatalı görünüyor, otomatik çeviri durduruldu. ' + emsg);
+      } else {
+        toast('Çeviri hatası: ' + emsg);
+      }
     } finally {
       img.classList.remove('mc-busy');
     }
@@ -399,6 +420,11 @@
   function pump() {
     while (S.active < CONCURRENCY && S.queue.length) {
       const { img, force } = S.queue.shift();
+      if (!force && !isNear(img, 1500)) {
+        // sıra gelene kadar çok uzakta kaldıysa şimdi çevirme, yaklaşınca tekrar denenir
+        if (S.auto && S.io && img.__mc) { img.__mc.status = 'observing'; S.io.observe(img); }
+        continue;
+      }
       S.active++;
       translateImage(img, force).finally(() => { S.active--; pump(); });
     }
@@ -409,15 +435,22 @@
   function onIntersect(entries) {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
-      S.io.unobserve(e.target);
-      if (S.auto) enqueue(e.target, false);
+      const img = e.target;
+      S.io.unobserve(img);
+      // hızlı kaydırırken üstünden geçilen sayfalar için istek harcama
+      setTimeout(() => {
+        if (!S.auto) return;
+        if (isNear(img, 600)) enqueue(img, false);
+        else if (S.io) S.io.observe(img);
+      }, 700);
     }
   }
 
   async function consider(img) {
     if (!S.auto) return;
     const st = img.__mc && img.__mc.status;
-    if (st === 'busy' || st === 'done' || st === 'queued' || st === 'observing') return;
+    if (st === 'busy' || st === 'done' || st === 'queued' || st === 'observing' ||
+        st === 'error' || st === 'notext') return;
     if (!img.complete || !img.naturalWidth) {
       if (!img.__mcL) {
         img.__mcL = true;
@@ -439,8 +472,13 @@
   async function startAuto() {
     injectStyle();
     if (S.auto) { scan(); return; }
+    // yeniden başlatılırken takılı kalmış görselleri sıfırla (OCR önbelleği sayesinde ücretsiz)
+    document.querySelectorAll('img').forEach((i) => {
+      const s = i.__mc && i.__mc.status;
+      if (s === 'error' || s === 'notext' || s === 'queued' || s === 'observing') i.__mc.status = undefined;
+    });
     S.auto = true;
-    S.io = new IntersectionObserver(onIntersect, { rootMargin: '1200px 0px 1200px 0px' });
+    S.io = new IntersectionObserver(onIntersect, { rootMargin: '600px 0px 600px 0px' });
     S.mo = new MutationObserver((muts) => {
       for (const mu of muts) {
         if (mu.type === 'attributes') {
@@ -468,6 +506,16 @@
     S.mo = null;
     S.queue.length = 0;
     document.querySelectorAll('img').forEach((i) => revert(i));
+  }
+
+  // Otomatik çeviriyi durdurur ama çevrilmiş sayfaları yerinde bırakır
+  function pauseAuto() {
+    S.auto = false;
+    if (S.io) S.io.disconnect();
+    if (S.mo) S.mo.disconnect();
+    S.io = null;
+    S.mo = null;
+    S.queue.length = 0;
   }
 
   const state = () => ({

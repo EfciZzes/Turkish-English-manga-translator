@@ -20,22 +20,88 @@
     });
   }
 
+  // OCR satır sonu tiresini farklı karakterlerle okuyabilir: - ‐ ‑ ‒ – — ­ ¬
+  const DASH = '\\-\u2010\u2011\u2012\u2013\u2014\u00AD\u00AC';
+  const endsWithDash = (t) => new RegExp('\\p{L}[' + DASH + ']$', 'u').test(String(t).trim());
+  const midDash = new RegExp('(\\p{L})[' + DASH + ']\\s+(\\p{Ll})', 'gu');
+
   function joinLines(lines) {
     let out = '';
     for (const l of sortLines(lines)) {
       const t = l.text.trim();
       if (!t) continue;
       if (!out) { out = t; continue; }
-      if (/\p{L}-$/u.test(out) && /^\p{L}/u.test(t)) {
-        const allCaps = !/\p{Ll}/u.test(out);
+      if (endsWithDash(out) && /^\p{L}/u.test(t)) {
+        // iki parça da büyük harfliyse bölünmüş kelimedir; "SPIDER-" + "Man" birleşiktir
+        const allCaps = !/\p{Ll}/u.test(out) && !/\p{Ll}/u.test(t);
         const nextLower = /^\p{Ll}/u.test(t);
-        // Satır sonunda bölünmüş kelime: "UNBE-" + "LIEVABLE"
+        // Satır sonunda bölünmüş kelime: "UNBE-" + "LIEVABLE", "imp-" + "ossible"
         out = (allCaps || nextLower) ? out.slice(0, -1) + t : out + t;
       } else {
         out += ' ' + t;
       }
     }
-    return out.replace(/\s+/g, ' ').trim();
+    // Aynı OCR satırının içinde kalmış bölünme: "imp- ossible"
+    return out.replace(midDash, '$1$2').replace(/\s+/g, ' ').trim();
+  }
+
+  const wordCount = (t) => String(t).trim().split(/\s+/).filter(Boolean).length;
+
+  function makeGroup(lines) {
+    const x0 = Math.min(...lines.map((l) => l.x));
+    const y0 = Math.min(...lines.map((l) => l.y));
+    const x1 = Math.max(...lines.map((l) => l.x + l.w));
+    const y1 = Math.max(...lines.map((l) => l.y + l.h));
+    return {
+      text: joinLines(lines),
+      x: x0, y: y0, w: x1 - x0, h: y1 - y0,
+      lineH: median(lines.map((l) => l.h)),
+      lineCount: lines.length,
+      _lines: lines,
+    };
+  }
+
+  function closeEnough(a, b, gapMul) {
+    const maxH = Math.max(a.lineH, b.lineH);
+    const minH = Math.min(a.lineH, b.lineH);
+    if (maxH > minH * 2.2) return false;
+    const hOverlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    const vGap = Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h);
+    if (vGap > gapMul * maxH) return false;
+    return hOverlap > 0 || Math.abs((a.x + a.w / 2) - (b.x + b.w / 2)) < 0.6 * Math.max(a.w, b.w);
+  }
+
+  /* Tek başına kalmış kısa parçaları (tek kelime, kelimenin yarısı) yakındaki
+     parçayla birleştir: "I" / "AM" / "EFCIZZES" veya "IMP-" / "OSSIBLE". */
+  function mergeOrphans(groups) {
+    let list = groups.slice();
+    for (let guard = 0; guard < 50; guard++) {
+      let merged = false;
+      for (let i = 0; i < list.length && !merged; i++) {
+        const g = list[i];
+        const dash = endsWithDash(g.text);
+        const orphan = g.lineCount === 1 && wordCount(g.text) <= 2 && letterCount(g.text) <= 14;
+        if (!dash && !orphan) continue;
+        let best = -1;
+        let bestGap = Infinity;
+        for (let j = 0; j < list.length; j++) {
+          if (j === i) continue;
+          const o = list[j];
+          // tireyle biten parçanın devamı altındadır
+          if (dash && o.y + o.h / 2 < g.y + g.h / 2) continue;
+          if (!closeEnough(g, o, dash ? 2.2 : 1.5)) continue;
+          const gap = Math.max(0, Math.max(g.y, o.y) - Math.min(g.y + g.h, o.y + o.h));
+          if (gap < bestGap) { bestGap = gap; best = j; }
+        }
+        if (best < 0) continue;
+        const ng = makeGroup(g._lines.concat(list[best]._lines));
+        list = list.filter((_, k) => k !== i && k !== best);
+        list.push(ng);
+        merged = true;
+      }
+      if (!merged) break;
+    }
+    return list;
   }
 
   function groupLines(rawLines) {
@@ -63,7 +129,7 @@
         if (vOverlap > 0.5 * minH) {
           // aynı satırdaki parçalar
           if (-hOverlap < 1.2 * maxH) union(i, j);
-        } else if (-vOverlap < 0.75 * maxH && hOverlap > 0.25 * Math.min(a.w, b.w)) {
+        } else if (-vOverlap < 0.9 * maxH && hOverlap > 0.1 * Math.min(a.w, b.w)) {
           // alt alta satırlar
           union(i, j);
         }
@@ -77,19 +143,9 @@
       buckets.get(r).push(L[i]);
     }
 
-    const groups = [];
-    for (const lines of buckets.values()) {
-      const x0 = Math.min(...lines.map((l) => l.x));
-      const y0 = Math.min(...lines.map((l) => l.y));
-      const x1 = Math.max(...lines.map((l) => l.x + l.w));
-      const y1 = Math.max(...lines.map((l) => l.y + l.h));
-      groups.push({
-        text: joinLines(lines),
-        x: x0, y: y0, w: x1 - x0, h: y1 - y0,
-        lineH: median(lines.map((l) => l.h)),
-        lineCount: lines.length,
-      });
-    }
+    let groups = [];
+    for (const lines of buckets.values()) groups.push(makeGroup(lines));
+    groups = mergeOrphans(groups);
     // okuma sırası: yukarıdan aşağı
     groups.sort((a, b) => a.y - b.y || a.x - b.x);
     return groups;

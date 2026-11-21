@@ -81,4 +81,10 @@ $('save').onclick = async () => {
   setTimeout(() => { $('saved').hidden = true; }, 2500);
 };
 
+$('clearCache').onclick = () => {
+  chrome.runtime.sendMessage({ type: 'clearCache' }, (r) => {
+    $('cacheMsg').textContent = r && !r.error ? ' Temizlendi.' : ' Temizlenemedi.';
+  });
+};
+
 load();
